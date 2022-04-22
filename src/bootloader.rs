@@ -1,3 +1,6 @@
+
+const BOOTCTRL_COMMAND_LINE_PROP : &str = "sabaton.boot.slot_suffix=";
+
 /// Interface to communicate with the bootloader
 pub trait BootControl {
     /// Initialize the HAL interface. Will be called once
@@ -52,7 +55,7 @@ pub trait BootControl {
     /// must contain the parameter of the form sabaton.boot.slot_suffix=<suffix>
     /// for example sabaton.boot.slot_suffix=a
     pub fn get_slot_suffix_from_cmd_line(command_line: &str) -> Result<&str, std::io::Error> {
-        if let Some(slot_command) = command_line.split(' ').find(|e| e.contains("sabaton.boot.slot_suffix=").into()) {
+        if let Some(slot_command) = command_line.split(' ').find(|e| e.contains(BOOTCTRL_COMMAND_LINE_PROP)) {
             Ok(slot_command.split('=').last().unwrap().trim())
         } else {
             Err(std::io::Error::new(std::io::ErrorKind::NotFound, "Slot suffix not found"))
