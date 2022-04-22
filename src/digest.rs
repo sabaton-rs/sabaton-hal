@@ -1,7 +1,7 @@
 use data_encoding::HEXUPPER;
 use ring::digest::{Context, Digest, SHA256};
 use std::fs::File;
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, Read};
 use std::path::Path;
 
 pub (crate) fn sha256_digest<R: Read>(mut reader: R) -> Result<Digest, std::io::Error> {
