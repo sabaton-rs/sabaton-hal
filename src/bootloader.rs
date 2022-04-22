@@ -28,7 +28,17 @@ pub trait BootControl {
 
     /// Return the suffix used in the partition names. This suffix is used to identify
     /// partition names from the fstab.
-    fn partition_suffix(&self, slot_index: usize) -> Result<&'static str, std::io::Error>;
+    /// The default implementation maps index(0) to 'a'   and index(1) to 'b'
+    fn partition_suffix(&self, slot_index: usize) -> Result<&'static str, std::io::Error> {
+        match slot_index {
+            0 => Ok("a"),
+            1 => Ok("b"),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Slot index out of bounds",
+            )),
+        }
+    }
 
     /// Is the slot marked as successfully booted
     fn is_slot_successful(&self, slot_index: usize) -> Result<bool, std::io::Error>;
@@ -85,17 +95,6 @@ pub mod mock {
 
         fn is_bootable(&self, _slot_index: usize) -> Result<bool, std::io::Error> {
             Ok(true)
-        }
-
-        fn partition_suffix(&self, slot_index: usize) -> Result<&'static str, std::io::Error> {
-            match slot_index {
-                0 => Ok("a"),
-                1 => Ok("b"),
-                _ => Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Slot index out of bounds",
-                )),
-            }
         }
 
         fn is_slot_successful(&self, _slot_index: usize) -> Result<bool, std::io::Error> {
