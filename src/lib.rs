@@ -3,3 +3,4 @@
 pub mod bootloader;
 pub mod update;
 pub mod digest;
+pub mod verity;
