@@ -47,12 +47,14 @@ pub struct Device {
     id : Uuid,
     version : Version,
     full_image : String,
+    sha256sum: String,
+    size : u64,
     parts : Vec<Part>,
 }
 
 impl Device {
     pub fn new(name: String, id: Uuid, version : Version, full_image: String) -> Self {
-        Device { name, id, version, full_image, parts: Vec::new() }        
+        Device { name, id, version, full_image, parts: Vec::new() , sha256sum:String::new(), size: 0}        
     }
 
     pub fn from_file(path : &Path) -> Result<Self,std::io::Error> {
@@ -98,9 +100,15 @@ impl Device {
     }
 
     pub fn compute_checksums(&mut self, package_folder: &Path) {
+
+        let full_image_path = package_folder.join(self.full_image());
+        self.sha256sum = digest::checksum(&full_image_path);
+        self.size = std::fs::metadata(full_image_path).unwrap().len();
+
         for part in &mut self.parts {
             let file_path = package_folder.join(&part.filename);
             part.sha256sum = digest::checksum(&file_path);
+            part.size = std::fs::metadata(&file_path).unwrap().len();
         }
     }
 
@@ -130,12 +138,13 @@ pub struct Part {
     pub gpt_id : Uuid,
     pub partitions : Vec<String>,
     pub sha256sum: String,
+    pub size : u64,
 
 }
 
 impl Part {
     pub fn new(name: String, version : Version, filename: String, gpt_id: Uuid, sha256sum: String) -> Self {
-        Part { name, version, filename, gpt_id, partitions: Vec::new(),sha256sum, }
+        Part { name, version, filename, gpt_id, partitions: Vec::new(),sha256sum, size: 0}
     }
 
     pub fn name(&self) -> &str {
