@@ -1,4 +1,4 @@
-use std::{path::PathBuf, io::Write};
+use std::{path::{PathBuf, Path}, io::Write};
 use ring::{signature, rand};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -54,6 +54,16 @@ impl  VerityPartitionHeader {
 
     pub fn add_table(&mut self, table : VerityTable) {
         self.tables.push(table)
+    }
+    
+    pub fn get_entry(&self, data_device: &Path) -> Option<&VerityTable> {
+        self.tables.iter().find_map(|e|{
+            if e.data_device == data_device {
+                Some(e)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn create_from(data: &[u8], public_key : &[u8]) -> Result<Self, VerityError> {
@@ -212,6 +222,9 @@ mod tests {
         let mut header = VerityPartitionHeader::new();
         header.add_table(table);
         header.add_table(table2);
+
+        let t = header.get_entry(Path::new("data")).unwrap();
+        assert_eq!(t.data_device,Path::new("data"));
 
         let rng = rand::SystemRandom::new();
 
