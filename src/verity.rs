@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, io::Write};
+use std::{path::{PathBuf, Path}, io::{Write, Seek, Read}};
 use ring::{signature, rand};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -66,6 +66,76 @@ impl  VerityPartitionHeader {
         })
     }
 
+    pub fn create_from_reader<T:Read>( mut reader : T, public_key : &[u8]) -> Result<Self, VerityError> {
+        let mut temp_buf = vec![0u8;4];
+        reader.read_exact(&mut temp_buf)
+            .map_err(|e|{
+                VerityError::Os { context: "Reading magic".to_owned(), error: e }
+            })?;
+
+        let magic = u32::from_ne_bytes([temp_buf[0], temp_buf[1], temp_buf[2], temp_buf[3]]);
+        if magic != VERITY_HEADER_MAGIC {
+            log::error!("Bad verity header magic");
+            return Err(VerityError::InvalidHeader);
+        }
+
+        reader.read_exact(&mut temp_buf)
+            .map_err(|e|{
+                VerityError::Os { context: "Reading version".to_owned(), error: e }
+            })?;
+        
+        let version = u32::from_ne_bytes([temp_buf[0], temp_buf[1], temp_buf[2], temp_buf[3]]);
+        if version != VERITY_HEADER_VERSION {
+            log::error!("Bad verity header version");
+            return Err(VerityError::InvalidHeader);
+        }
+
+        let mut signature = vec![0u8;256];
+        reader.read_exact(&mut signature)
+            .map_err(|e|{
+                VerityError::Os { context: "Reading signature".to_owned(), error: e }
+            })?;
+
+        reader.read_exact(&mut temp_buf)
+        .map_err(|e|{
+            VerityError::Os { context: "Reading table length".to_owned(), error: e }
+        })?;
+        let table_data_length = u32::from_ne_bytes([temp_buf[0], temp_buf[1], temp_buf[2], temp_buf[3]]) as usize;
+        if table_data_length > VERITY_HEADER_MAX_SERIALIZED_LEN {
+            log::error!("Table cannot be more than 32K");
+            return Err(VerityError::InvalidHeader)
+        } 
+
+        let mut table_data = vec![0u8;table_data_length];
+        reader.read_exact(&mut table_data)
+        .map_err(|e|{
+            VerityError::Os { context: "Reading table data".to_owned(), error: e }
+        })?;
+
+        // verify signature before construction
+        let public_key = signature::UnparsedPublicKey::new(&signature::RSA_PKCS1_2048_8192_SHA256,public_key);
+
+        public_key.verify(&table_data, &signature)
+            .map_err(|e|{
+                log::error!("Key verification failed: {}", e);
+                VerityError::SignatureInvalid
+            })?;
+        
+        // signature ok, safe to deserialize table
+        let tables: Vec<VerityTable> = bincode::deserialize(&table_data)
+            .map_err(|_e| {
+                log::error!("Deserialization failed");
+                VerityError::InvalidHeader
+            })?;
+        
+        Ok(
+            Self {
+                tables,
+            }
+        )
+    }
+
+    #[deprecated]
     pub fn create_from(data: &[u8], public_key : &[u8]) -> Result<Self, VerityError> {
         
         if data.len() < 268 {
@@ -226,7 +296,7 @@ mod tests {
         let t = header.get_entry(Path::new("data")).unwrap();
         assert_eq!(t.data_device,Path::new("data"));
 
-        let rng = rand::SystemRandom::new();
+        let _rng = rand::SystemRandom::new();
 
         let key_data = std::fs::read("testdata/verity_rsa-2048-private-key.pk8").unwrap();
 
@@ -242,14 +312,29 @@ mod tests {
 
         //println!("buffer:{:?}",outbuf);
 
-        let mut slice = outbuf.as_mut_slice();
+        let header = VerityPartitionHeader::create_from_reader(&*outbuf, public_key).unwrap();
+        let t = header.get_entry(Path::new("data")).unwrap();
+        assert_eq!(t.data_device,Path::new("data"));
 
-        let header = VerityPartitionHeader::create_from(&slice, public_key).unwrap();
+        let slice = outbuf.as_mut_slice();
+        let header = VerityPartitionHeader::create_from(slice, public_key).unwrap();
+        let t = header.get_entry(Path::new("data")).unwrap();
+        assert_eq!(t.data_device,Path::new("data"));
+
 
         // lets try to corrupt the data
         slice[278] = 0xff;
 
-        if let Ok(header) = VerityPartitionHeader::create_from(&slice, public_key) {
+        if let Ok(_) = VerityPartitionHeader::create_from(&slice, public_key) {
+            panic!("This should fail!");
+        }
+
+       
+        
+        // lets try to corrupt the data
+        slice[278] = 0xff;
+
+        if let Ok(_) = VerityPartitionHeader::create_from(&slice, public_key) {
             panic!("This should fail!");
         }
     }
