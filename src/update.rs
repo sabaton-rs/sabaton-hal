@@ -227,6 +227,12 @@ impl UpdatePackage {
         self.parts.iter().find(|p| p.new_part == name)
     }
 
+    pub fn from_file(path:&Path) -> Result<Self,std::io::Error> {
+        let file = std::fs::File::open(path)?;
+        let manifest : Self = serde_json::from_reader(file)?;
+        Ok(manifest)
+    }
+
 }
 
 #[derive(Deserialize, Serialize)]
