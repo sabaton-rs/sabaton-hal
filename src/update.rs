@@ -186,6 +186,7 @@ pub struct DeltaPart {
     // the new part name.
     pub new_part : String,
     pub new_sha256_sum : String,
+    pub partitions : Vec<String>,
     // the name of the file with the delta contents.
     pub patch : String,
     pub patch_sha256_sum : String,
